@@ -4,6 +4,9 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  issues: write  # Ensures the workflow can modify issues
+
 jobs:
   classify_issue:
     runs-on: ubuntu-latest
@@ -16,19 +19,50 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const issueBody = context.payload.issue.body;
+            const issueBody = context.payload.issue.body || "No description provided.";
             const axios = require('axios');
-            const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-              model: "gpt-4",
-              messages: [{role: "system", content: "Classify the following GitHub issue into one of these categories: bug, feature request, documentation, security, performance, chore."}, {role: "user", content: issueBody}]
-            }, {
-              headers: {
-                'Authorization': `Bearer ${{ secrets.OPENAI_API_KEY }}`,
-                'Content-Type': 'application/json'
+
+            try {
+              console.log("Calling OpenAI API...");
+              const response = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                  model: "gpt-4",
+                  messages: [
+                    {role: "system", content: "Classify the following GitHub issue into one of these categories: bug, feature request, documentation, security, performance, chore."},
+                    {role: "user", content: issueBody}
+                  ]
+                },
+                {
+                  headers: {
+                    'Authorization': `Bearer ${{ secrets.OPENAI_API_KEY }}`,
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+
+              const classification = response.data.choices?.[0]?.message?.content?.trim().toLowerCase();
+              console.log(`Classification: ${classification}`);
+
+              const labelMap = {
+                "bug": "Type: Bug",
+                "feature request": "Type: Feature",
+                "documentation": "Type: Documentation",
+                "security": "Type: Security",
+                "performance": "Type: Performance",
+                "chore": "Type: Chore"
+              };
+
+              if (!classification || !labelMap[classification]) {
+                console.log("Classification not recognized. Defaulting to 'Type: Needs Review'");
+                core.setOutput('classification', "Needs Review");
+              } else {
+                core.setOutput('classification', labelMap[classification]);
               }
-            });
-            const classification = response.data.choices[0].message.content.trim().toLowerCase();
-            core.setOutput('classification', classification);
+            } catch (error) {
+              console.error("Error during AI classification:", error);
+              core.setOutput('classification', "Needs Review"); // Fallback label
+            }
 
       - name: Label Issue
         uses: actions/github-script@v6
@@ -36,22 +70,14 @@ jobs:
           script: |
             const classification = "${{ steps.classify.outputs.classification }}";
             const issueNumber = context.payload.issue.number;
-            const labels = {
-              "bug": "Type: Bug",
-              "feature request": "Type: Feature",
-              "documentation": "Type: Documentation",
-              "security": "Type: Security",
-              "performance": "Type: Performance",
-              "chore": "Type: Chore"
-            };
-            if (labels[classification]) {
-              github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                labels: [labels[classification]]
-              });
-            }
+            console.log(`Assigning label: ${classification} to issue #${issueNumber}`);
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [classification]
+            });
 
       - name: Comment on Issue
         uses: actions/github-script@v6
@@ -59,10 +85,12 @@ jobs:
           script: |
             const issueNumber = context.payload.issue.number;
             const classification = "${{ steps.classify.outputs.classification }}";
-            github.rest.issues.createComment({
+            
+            console.log(`Commenting on issue #${issueNumber} with classification: ${classification}`);
+            
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `🤖 AI has classified this issue as **${classification}**. If this is incorrect, please update the labels manually.`
             });
-            
