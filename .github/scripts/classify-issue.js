@@ -11,14 +11,14 @@ async function run() {
 
     const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
 
-    // Fetch existing labels on the issue
+    // Fetch existing labels
     const { data: existingLabels } = await octokit.rest.issues.listLabelsOnIssue({
       owner: repoOwner,
       repo: repoName,
       issue_number: issueNumber
     });
 
-    const existingLabelNames = existingLabels.map(label => label.name.toLowerCase());
+    const existingLabelNames = existingLabels.map(label => label.toLowerCase());
 
     const classificationMap = {
       "bug": "Type: Bug",
@@ -61,12 +61,17 @@ async function run() {
 
     if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
 
-    const classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
-    console.log(`AI Classification: ${classification}`);
+    let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
+    console.log(`AI Classification: **${classification}**`);
 
-    const finalLabel = classificationMap[classification] || "Status: Awaiting Review";
+    // Normalize classification to match map keys
+    const normalizedClassification = Object.keys(classificationMap).find(
+      key => key.toLowerCase() === classification
+    );
 
-    // If classification label is already present, do not add "Awaiting Review"
+    const finalLabel = normalizedClassification ? classificationMap[normalizedClassification] : "Status: Awaiting Review";
+
+    // If classification label is already present, do not assign "Awaiting Review"
     if (existingLabelNames.includes(finalLabel.toLowerCase())) {
       console.log(`Label "${finalLabel}" already exists. No need to assign "Awaiting Review".`);
       return;
