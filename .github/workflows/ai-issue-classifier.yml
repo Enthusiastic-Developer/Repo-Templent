@@ -5,7 +5,7 @@ on:
     types: [opened]
 
 permissions:
-  issues: write  # Ensure the workflow can modify issues
+  issues: write # Ensure the workflow can modify issues
 
 jobs:
   classify_issue:
@@ -14,100 +14,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install axios @actions/core @actions/github
+
       - name: Analyze Issue with OpenAI
-        id: classify
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const issueBody = context.payload.issue.body || "No description provided.";
-            
-            const classificationMap = {
-              "bug": "Type: Bug",
-              "chore": "Type: Chore",
-              "documentation": "Type: Documentation",
-              "enhancement": "Type: Enhancement",
-              "feature freeze": "Type: Feature Freeze",
-              "feature": "Type: Feature",
-              "feedback": "Type: Feedback",
-              "new branch": "Type: New branch",
-              "performance": "Type: Performance",
-              "question": "Type: Question",
-              "refactor": "Type: Refactor",
-              "release notes": "Type: Release Notes",
-              "security": "Type: Security",
-              "task": "Type: Task",
-              "test improvement": "Type: Test Improvement",
-              "test": "Type: Test",
-              "won't fix": "Won't fix",
-              "priority high": "Priority: High +",
-              "priority medium": "Priority: Medium",
-              "priority low": "Priority: Low -",
-              "priority urgent": "Priority: Urgent"
-            };
-
-            try {
-              console.log("Calling OpenAI API...");
-              
-              const { request } = require("@octokit/request");
-              const response = await request("POST https://api.openai.com/v1/chat/completions", {
-                headers: {
-                  authorization: `Bearer ${{ secrets.OPENAI_API_KEY }}`,
-                  "content-type": "application/json"
-                },
-                data: {
-                  model: "gpt-4",
-                  messages: [
-                    {role: "system", content: "Classify this GitHub issue into one or more of the following categories: bug, chore, documentation, enhancement, feature freeze, feature, feedback, new branch, performance, question, refactor, release notes, security, task, test improvement, test, won't fix. Also, determine priority if applicable: priority high, priority medium, priority low, priority urgent. Return labels as a comma-separated list."},
-                    {role: "user", content: issueBody}
-                  ]
-                }
-              });
-
-              if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
-
-              let classification = response.data.choices?.[0]?.message?.content?.trim().toLowerCase();
-              console.log(`AI Classification: ${classification}`);
-
-              const labels = classification.split(",").map(label => classificationMap[label.trim()]).filter(Boolean);
-              console.log(`Final Labels Assigned: ${labels}`);
-
-              core.setOutput('classification', labels);
-            } catch (error) {
-              console.error("Error during AI classification:", error);
-              core.setOutput('classification', ["Status: Awaiting Review"]);
-            }
-
-      - name: Label Issue
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const labels = ${{ steps.classify.outputs.classification }};
-            const issueNumber = context.payload.issue.number;
-            console.log(`Assigning labels: ${labels} to issue #${issueNumber}`);
-
-            try {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                labels: labels
-              });
-            } catch (error) {
-              console.error(`Failed to add labels to issue #${issueNumber}`, error);
-            }
-
-      - name: Comment on Issue
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const issueNumber = context.payload.issue.number;
-            const labels = ${{ steps.classify.outputs.classification }};
-            
-            console.log(`Commenting on issue #${issueNumber} with labels: ${labels}`);
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: `🤖 AI has classified this issue with the following labels: **${labels.join(", ")}**. If this is incorrect, please update the labels manually.`
-            });
+        run: node .github/scripts/classify-issue.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
