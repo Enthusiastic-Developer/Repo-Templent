@@ -22,8 +22,8 @@ jobs:
       - name: Install Dependencies
         run: npm install axios @actions/core @actions/github
 
-      - name: Analyze Issue with OpenAI
+      - name: Analyze Issue with Gemini API
         run: node .github/scripts/classify-issue.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

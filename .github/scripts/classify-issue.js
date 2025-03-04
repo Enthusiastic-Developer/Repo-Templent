@@ -26,23 +26,28 @@ async function run() {
       "won't fix": "Won't fix"
     };
 
-    console.log("Calling OpenAI API...");
-    const response = await axios.post("https://api.openai.com/v1/chat/completions", {
-      model: "gpt-4",
-      messages: [
-        { role: "system", content: "Classify this GitHub issue into one of these categories: bug, chore, documentation, enhancement, feature freeze, feature, feedback, new branch, performance, question, refactor, release notes, security, task, test improvement, test, won't fix." },
-        { role: "user", content: issueBody }
-      ]
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+    console.log("Calling Gemini API...");
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `Classify this GitHub issue into one of these categories: bug, chore, documentation, enhancement, feature freeze, feature, feedback, new branch, performance, question, refactor, release notes, security, task, test improvement, test, won't fix. Issue: '${issueBody}'`
+              }
+            ]
+          }
+        ]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' }
       }
-    });
+    );
 
     if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
 
-    const classification = response.data.choices?.[0]?.message?.content?.trim().toLowerCase();
+    const classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
     console.log(`AI Classification: ${classification}`);
 
     const finalLabel = classificationMap[classification] || "Status: Awaiting Review";
