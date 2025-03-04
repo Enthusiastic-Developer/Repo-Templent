@@ -5,6 +5,20 @@ const github = require('@actions/github');
 async function run() {
   try {
     const issueBody = github.context.payload.issue.body || "No description provided.";
+    const issueNumber = github.context.payload.issue.number;
+    const repoOwner = github.context.repo.owner;
+    const repoName = github.context.repo.repo;
+
+    const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+
+    // Fetch existing labels on the issue
+    const { data: existingLabels } = await octokit.rest.issues.listLabelsOnIssue({
+      owner: repoOwner,
+      repo: repoName,
+      issue_number: issueNumber
+    });
+
+    const existingLabelNames = existingLabels.map(label => label.name.toLowerCase());
 
     const classificationMap = {
       "bug": "Type: Bug",
@@ -51,21 +65,27 @@ async function run() {
     console.log(`AI Classification: ${classification}`);
 
     const finalLabel = classificationMap[classification] || "Status: Awaiting Review";
+
+    // If classification label is already present, do not add "Awaiting Review"
+    if (existingLabelNames.includes(finalLabel.toLowerCase())) {
+      console.log(`Label "${finalLabel}" already exists. No need to assign "Awaiting Review".`);
+      return;
+    }
+
     console.log(`Final Label Assigned: ${finalLabel}`);
 
-    const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
-    const issueNumber = github.context.payload.issue.number;
-
+    // Assign label
     await octokit.rest.issues.addLabels({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: repoOwner,
+      repo: repoName,
       issue_number: issueNumber,
       labels: [finalLabel]
     });
 
+    // Add comment
     await octokit.rest.issues.createComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: repoOwner,
+      repo: repoName,
       issue_number: issueNumber,
       body: `🤖 AI has classified this issue as **${finalLabel}**. If this is incorrect, please update the labels manually.`
     });
