@@ -2,7 +2,7 @@ name: Auto-Move Issues in GitHub Project
 
 on:
   issues:
-    types: [labeled, unlabeled, assigned, closed]
+    types: [labeled, assigned, closed]
 
 permissions:
   issues: write
@@ -12,74 +12,61 @@ jobs:
   move_issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Move issue based on label or status
+      - name: Move issue in GitHub Project
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const useGitHubProjects = true;  // Set to 'false' if GitHub Projects is not used
-
-            const projectId = 15;  // Replace with your GitHub Project ID
-
-            // Priority and Status Mapping
-            const priorityMap = {
-              "Priority: Urgent": "To Do",
-              "Priority: High +": "To Do",
-              "Priority: Medium": "Backlog",
-              "Priority: Low -": "Backlog"
-            };
+            const projectId = "15";  // Replace with your GitHub Project ID
+            const fieldId = "PVTSSF_lADOBJnNB84Azg24zgpSx9w";  // Status Field ID
+            const issueNodeId = context.payload.issue.node_id;
 
             const statusMap = {
-              "Status: Awaiting Review": "Review",
-              "Status: WIP": "In Progress",
-              "Status: Completed": "Completed",
-              "Status: Stale": "Backlog",
-              "Status: Waiting": "Backlog"
+              "Status: Awaiting Review": "15d1b641",  // Review
+              "Status: WIP": "520c7b3b",  // In Progress
+              "Status: Completed": "9369703c",  // Completed
+              "Status: Stale": "e36c32bc",  // Backlog
+              "Status: Waiting": "e36c32bc",  // Backlog
+              "Priority: Urgent": "99581684"  // To Do
             };
 
-            const issueNumber = context.payload.issue.number;
             const labels = context.payload.issue.labels.map(label => label.name);
-            let newStatus = "Backlog"; // Default status
+            let newStatus = "e36c32bc";  // Default to Backlog
 
-            // Check priority labels first
-            for (const [label, status] of Object.entries(priorityMap)) {
+            for (const [label, statusId] of Object.entries(statusMap)) {
               if (labels.includes(label)) {
-                newStatus = status;
-                break;
-              }
-            }
-
-            // If no priority label, check status labels
-            for (const [label, status] of Object.entries(statusMap)) {
-              if (labels.includes(label)) {
-                newStatus = status;
+                newStatus = statusId;
                 break;
               }
             }
 
             // If issue is assigned, move to "In Progress"
             if (context.payload.issue.assignee) {
-              newStatus = "In Progress";
+              newStatus = "520c7b3b";
             }
 
             // If issue is closed, move to "Completed"
             if (context.payload.issue.state === "closed") {
-              newStatus = "Completed";
+              newStatus = "9369703c";
             }
 
-            console.log(`Moving issue #${issueNumber} to ${newStatus}`);
+            console.log(`Moving issue #${context.payload.issue.number} to Status ID ${newStatus}`);
 
-            if (useGitHubProjects) {
-              await github.rest.projects.updateCard({
-                card_id: issueNumber,  // Issue number as the card ID
-                column_id: newStatus  // GitHub Project status column
-              });
-            } else {
-              console.log(`GitHub Projects not enabled, updating labels instead.`);
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                labels: [newStatus]
-              });
-            }
+            const mutation = `
+              mutation {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: "${projectId}"
+                    itemId: "${issueNodeId}"
+                    fieldId: "${fieldId}"
+                    value: { singleSelectOptionId: "${newStatus}" }
+                  }
+                ) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }
+            `;
+
+            await github.graphql(mutation);
