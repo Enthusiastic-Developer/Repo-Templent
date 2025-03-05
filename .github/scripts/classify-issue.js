@@ -8,15 +8,8 @@ async function run() {
     const issueNumber = github.context.payload.issue.number;
     const repoOwner = github.context.repo.owner;
     const repoName = github.context.repo.repo;
-    const lableName = github.context.repo.labels
 
     const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
-
-    if(lableName){
-      console.log(lableName);
-      console.log(`Issue already has ${lableName.length} label(s). Skipping AI classification.`);
-      return;
-    }
 
     // Fetch existing labels
     const { data: existingLabels } = await octokit.rest.issues.listLabelsOnIssue({
@@ -25,7 +18,11 @@ async function run() {
       issue_number: issueNumber
     });
 
-    const existingLabelNames = existingLabels.map(label => label.toLowerCase());
+    // If any labels already exist, skip classification
+    if (existingLabels.length > 0) {
+      console.log(`Issue already has ${existingLabels.length} label(s). Skipping AI classification.`);
+      return;
+    }
 
     const classificationMap = {
       "bug": "Type: Bug",
@@ -87,6 +84,8 @@ async function run() {
     const finalLabel = normalizedClassification 
       ? classificationMap[normalizedClassification] 
       : "Status: Awaiting Review";
+
+    const existingLabelNames = existingLabels.map(label => label.name.toLowerCase());
 
     // If classification label is already present, do not assign "Awaiting Review"
     if (existingLabelNames.includes(finalLabel.toLowerCase())) {
