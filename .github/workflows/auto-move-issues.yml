@@ -1,0 +1,85 @@
+name: Auto-Move Issues in GitHub Project
+
+on:
+  issues:
+    types: [labeled, unlabeled, assigned, closed]
+
+permissions:
+  issues: write
+  repository-projects: write
+
+jobs:
+  move_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move issue based on label or status
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const useGitHubProjects = true;  // Set to 'false' if GitHub Projects is not used
+
+            const projectId = YOUR_PROJECT_ID;  // Replace with your GitHub Project ID
+
+            // Priority and Status Mapping
+            const priorityMap = {
+              "Priority: Urgent": "To Do",
+              "Priority: High +": "To Do",
+              "Priority: Medium": "Backlog",
+              "Priority: Low -": "Backlog"
+            };
+
+            const statusMap = {
+              "Status: Awaiting Review": "Review",
+              "Status: WIP": "In Progress",
+              "Status: Completed": "Completed",
+              "Status: Stale": "Backlog",
+              "Status: Waiting": "Backlog"
+            };
+
+            const issueNumber = context.payload.issue.number;
+            const labels = context.payload.issue.labels.map(label => label.name);
+            let newStatus = "Backlog"; // Default status
+
+            // Check priority labels first
+            for (const [label, status] of Object.entries(priorityMap)) {
+              if (labels.includes(label)) {
+                newStatus = status;
+                break;
+              }
+            }
+
+            // If no priority label, check status labels
+            for (const [label, status] of Object.entries(statusMap)) {
+              if (labels.includes(label)) {
+                newStatus = status;
+                break;
+              }
+            }
+
+            // If issue is assigned, move to "In Progress"
+            if (context.payload.issue.assignee) {
+              newStatus = "In Progress";
+            }
+
+            // If issue is closed, move to "Completed"
+            if (context.payload.issue.state === "closed") {
+              newStatus = "Completed";
+            }
+
+            console.log(`Moving issue #${issueNumber} to ${newStatus}`);
+
+            if (useGitHubProjects) {
+              await github.rest.projects.updateCard({
+                card_id: issueNumber,  // Issue number as the card ID
+                column_id: newStatus  // GitHub Project status column
+              });
+            } else {
+              console.log(`GitHub Projects not enabled, updating labels instead.`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: [newStatus]
+              });
+            }
