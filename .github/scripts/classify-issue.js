@@ -48,7 +48,7 @@ async function run() {
           {
             parts: [
               {
-                text: `Classify this GitHub issue into one of these categories: bug, chore, documentation, enhancement, feature freeze, feature, feedback, new branch, performance, question, refactor, release notes, security, task, test improvement, test, won't fix. Issue: '${issueBody}'`
+                text: `Classify this GitHub issue into one of these categories: ${Object.keys(classificationMap).join(', ')}. Issue: '${issueBody}'`
               }
             ]
           }
@@ -64,12 +64,14 @@ async function run() {
     let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
     console.log(`AI Classification: **${classification}**`);
 
-    // Normalize classification to match map keys
+    // Improved normalization to handle partial matches and variations
     const normalizedClassification = Object.keys(classificationMap).find(
-      key => key.toLowerCase() === classification
+      key => classification.includes(key.toLowerCase())
     );
 
-    const finalLabel = normalizedClassification ? classificationMap[normalizedClassification] : "Status: Awaiting Review";
+    const finalLabel = normalizedClassification 
+      ? classificationMap[normalizedClassification] 
+      : "Status: Awaiting Review";
 
     // If classification label is already present, do not assign "Awaiting Review"
     if (existingLabelNames.includes(finalLabel.toLowerCase())) {
@@ -97,6 +99,7 @@ async function run() {
 
   } catch (error) {
     console.error("Error during AI classification:", error);
+    core.setFailed(error.message);
   }
 }
 
