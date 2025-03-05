@@ -61,12 +61,13 @@ async function run() {
 
     if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
 
-    // Extract the first line or the first word to get the classification
+    // Extract classification, removing asterisks and trimming
     let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text
-      ?.trim()
+      ?.replace(/\*/g, '')  // Remove all asterisks
+      .trim()
       .toLowerCase()
-      .split('\n')[0]
-      .split(' ')[0];
+      .split('\n')[0]  // Take first line
+      .split(' ')[0];  // Take first word
 
     console.log(`AI Classification: **${classification}**`);
 
