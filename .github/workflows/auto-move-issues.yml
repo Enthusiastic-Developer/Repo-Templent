@@ -15,7 +15,7 @@ jobs:
       - name: Move issue in GitHub Project
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_GITHUB_PROJECTS }}  # Use the Personal Access Token
           script: |
             const projectId = "PVT_kwDOBJnNB84Azg24";  // Correct Project ID
             const fieldId = "PVTSSF_lADOBJnNB84Azg24zgpSx9w";  // Status Field ID
@@ -48,6 +48,16 @@ jobs:
             // If issue is closed, move to "Completed"
             if (context.payload.issue.state === "closed") {
               newStatus = "9369703c";
+            }
+
+            // Prevent running on newly created issues (avoids duplicate runs)
+            const issueCreatedAt = new Date(context.payload.issue.created_at);
+            const now = new Date();
+            const timeDifference = (now - issueCreatedAt) / 1000;  // Convert to seconds
+
+            if (timeDifference < 10) {
+              console.log("Skipping issue movement as it's a newly created issue.");
+              return;
             }
 
             console.log(`Moving issue #${context.payload.issue.number} to Status ID ${newStatus}`);
