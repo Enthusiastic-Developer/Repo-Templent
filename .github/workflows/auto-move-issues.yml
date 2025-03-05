@@ -17,7 +17,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const projectId = "15";  // Replace with your GitHub Project ID
+            const projectId = "PVT_kwDOBJnNB84Azg24";  // Correct Project ID
             const fieldId = "PVTSSF_lADOBJnNB84Azg24zgpSx9w";  // Status Field ID
             const issueNodeId = context.payload.issue.node_id;
 
