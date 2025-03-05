@@ -19,7 +19,7 @@ jobs:
           script: |
             const useGitHubProjects = true;  // Set to 'false' if GitHub Projects is not used
 
-            const projectId = YOUR_PROJECT_ID;  // Replace with your GitHub Project ID
+            const projectId = 15;  // Replace with your GitHub Project ID
 
             // Priority and Status Mapping
             const priorityMap = {
