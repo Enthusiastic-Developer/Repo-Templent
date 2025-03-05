@@ -11,14 +11,18 @@ async function run() {
 
     const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
 
-    // Fetch existing labels on the issue
+    // Fetch existing labels
     const { data: existingLabels } = await octokit.rest.issues.listLabelsOnIssue({
       owner: repoOwner,
       repo: repoName,
       issue_number: issueNumber
     });
 
-    const existingLabelNames = existingLabels.map(label => label.name.toLowerCase());
+    // If any labels already exist, skip classification
+    if (existingLabels.length > 0) {
+      console.log(`Issue already has ${existingLabels.length} label(s). Skipping AI classification.`);
+      return;
+    }
 
     const classificationMap = {
       "bug": "Type: Bug",
@@ -48,7 +52,7 @@ async function run() {
           {
             parts: [
               {
-                text: `Classify this GitHub issue into one of these categories: bug, chore, documentation, enhancement, feature freeze, feature, feedback, new branch, performance, question, refactor, release notes, security, task, test improvement, test, won't fix. Issue: '${issueBody}'`
+                text: `Classify this GitHub issue into ONLY ONE of these categories: ${Object.keys(classificationMap).join(', ')}. Issue: '${issueBody}'`
               }
             ]
           }
@@ -61,12 +65,29 @@ async function run() {
 
     if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
 
-    const classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
-    console.log(`AI Classification: ${classification}`);
+    // Extract classification, removing asterisks and trimming
+    let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text
+      ?.replace(/\*/g, '')  // Remove all asterisks
+      .trim()
+      .toLowerCase()
+      .split('\n')[0]  // Take first line
+      .split(' ')[0];  // Take first word
 
-    const finalLabel = classificationMap[classification] || "Status: Awaiting Review";
+    console.log(`AI Classification: **${classification}**`);
 
-    // If classification label is already present, do not add "Awaiting Review"
+    // Robust matching
+    const normalizedClassification = Object.keys(classificationMap).find(
+      key => classification === key.toLowerCase() || 
+             key.toLowerCase().includes(classification)
+    );
+
+    const finalLabel = normalizedClassification 
+      ? classificationMap[normalizedClassification] 
+      : "Status: Awaiting Review";
+
+    const existingLabelNames = existingLabels.map(label => label.name.toLowerCase());
+
+    // If classification label is already present, do not assign "Awaiting Review"
     if (existingLabelNames.includes(finalLabel.toLowerCase())) {
       console.log(`Label "${finalLabel}" already exists. No need to assign "Awaiting Review".`);
       return;
@@ -92,6 +113,7 @@ async function run() {
 
   } catch (error) {
     console.error("Error during AI classification:", error);
+    core.setFailed(error.message);
   }
 }
 
