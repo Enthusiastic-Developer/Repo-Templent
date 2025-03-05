@@ -8,8 +8,15 @@ async function run() {
     const issueNumber = github.context.payload.issue.number;
     const repoOwner = github.context.repo.owner;
     const repoName = github.context.repo.repo;
+    const lableName = github.context.repo.labels
 
     const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+
+    if(lableName){
+      console.log(lableName);
+      console.log(`Issue already has ${lableName.length} label(s). Skipping AI classification.`);
+      return;
+    }
 
     // Fetch existing labels
     const { data: existingLabels } = await octokit.rest.issues.listLabelsOnIssue({
