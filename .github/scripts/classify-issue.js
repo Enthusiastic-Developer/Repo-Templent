@@ -48,7 +48,7 @@ async function run() {
           {
             parts: [
               {
-                text: `Classify this GitHub issue into one of these categories: ${Object.keys(classificationMap).join(', ')}. Issue: '${issueBody}'`
+                text: `Classify this GitHub issue into ONLY ONE of these categories: ${Object.keys(classificationMap).join(', ')}. Issue: '${issueBody}'`
               }
             ]
           }
@@ -61,12 +61,19 @@ async function run() {
 
     if (response.status !== 200) throw new Error(`API error: ${response.status} ${response.statusText}`);
 
-    let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
+    // Extract the first line or the first word to get the classification
+    let classification = response.data?.candidates?.[0]?.content?.parts?.[0]?.text
+      ?.trim()
+      .toLowerCase()
+      .split('\n')[0]
+      .split(' ')[0];
+
     console.log(`AI Classification: **${classification}**`);
 
-    // Improved normalization to handle partial matches and variations
+    // Robust matching
     const normalizedClassification = Object.keys(classificationMap).find(
-      key => classification.includes(key.toLowerCase())
+      key => classification === key.toLowerCase() || 
+             key.toLowerCase().includes(classification)
     );
 
     const finalLabel = normalizedClassification 
