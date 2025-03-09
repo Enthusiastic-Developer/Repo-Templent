@@ -60,23 +60,88 @@ jobs:
               return;
             }
 
-            console.log(`Moving issue #${context.payload.issue.number} to Status ID ${newStatus}`);
+            console.log(`Processing issue #${context.payload.issue.number} - trying to move to Status ID ${newStatus}`);
 
-            const mutation = `
-              mutation {
-                updateProjectV2ItemFieldValue(
-                  input: {
-                    projectId: "${projectId}"
-                    itemId: "${issueNodeId}"
-                    fieldId: "${fieldId}"
-                    value: { singleSelectOptionId: "${newStatus}" }
-                  }
-                ) {
-                  projectV2Item {
-                    id
+            // First, check if the issue is already in the project
+            const findItemQuery = `
+              query {
+                node(id: "${projectId}") {
+                  ... on ProjectV2 {
+                    items(first: 100) {
+                      nodes {
+                        id
+                        content {
+                          ... on Issue {
+                            id
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
             `;
 
-            await github.graphql(mutation);
+            try {
+              const projectData = await github.graphql(findItemQuery);
+              const projectItems = projectData.node.items.nodes;
+              
+              // Find the item that corresponds to our issue
+              let projectItemId = null;
+              for (const item of projectItems) {
+                if (item.content && item.content.id === issueNodeId) {
+                  projectItemId = item.id;
+                  break;
+                }
+              }
+              
+              // If the issue isn't in the project yet, add it first
+              if (!projectItemId) {
+                console.log(`Adding issue #${context.payload.issue.number} to project`);
+                const addMutation = `
+                  mutation {
+                    addProjectV2ItemById(input: {
+                      projectId: "${projectId}"
+                      contentId: "${issueNodeId}"
+                    }) {
+                      item {
+                        id
+                      }
+                    }
+                  }
+                `;
+                
+                const addResult = await github.graphql(addMutation);
+                projectItemId = addResult.addProjectV2ItemById.item.id;
+                console.log(`Added issue to project, got project item ID: ${projectItemId}`);
+              } else {
+                console.log(`Found existing project item ID: ${projectItemId}`);
+              }
+              
+              // Now update the status using the project item ID
+              console.log(`Moving issue #${context.payload.issue.number} to Status ID ${newStatus}`);
+              const updateMutation = `
+                mutation {
+                  updateProjectV2ItemFieldValue(
+                    input: {
+                      projectId: "${projectId}"
+                      itemId: "${projectItemId}"
+                      fieldId: "${fieldId}"
+                      value: { singleSelectOptionId: "${newStatus}" }
+                    }
+                  ) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `;
+              
+              await github.graphql(updateMutation);
+              console.log(`Successfully updated issue status in project`);
+              
+            } catch (error) {
+              console.error(`Error processing issue: ${error.message}`);
+              console.error(JSON.stringify(error, null, 2));
+              throw error;
+            }
